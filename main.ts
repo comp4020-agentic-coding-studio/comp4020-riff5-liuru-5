@@ -1,4 +1,4 @@
-import { Game, type BubbleKind } from "./game.ts";
+import { Game, KIND_PROFILE, type BubbleKind } from "./game.ts";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const bubbleEls = [
@@ -49,6 +49,22 @@ function sizeFor(age: number, lifetime: number, kindSize: number): number {
   return (MIN_SIZE + (MAX_SIZE - MIN_SIZE) * remaining) * kindSize;
 }
 
+function spawnFeedback(x: number, y: number, text: string, tone: "" | "gold" | "bad"): void {
+  const el = document.createElement("span");
+  el.className = tone ? `pop-feedback ${tone}` : "pop-feedback";
+  el.textContent = text;
+  el.style.left = `${x * stageWidth}px`;
+  el.style.top = `${y * stageHeight}px`;
+  stage.appendChild(el);
+  el.addEventListener("animationend", () => el.remove());
+}
+
+function feedbackFor(kind: BubbleKind): { text: string; tone: "" | "gold" | "bad" } {
+  if (kind === "bomb") return { text: "boom", tone: "bad" };
+  const value = KIND_PROFILE[kind].value;
+  return { text: `+${value}`, tone: kind === "gold" ? "gold" : "" };
+}
+
 const lastSlotId: (number | null)[] = [null, null, null];
 
 function render(): void {
@@ -84,6 +100,9 @@ function render(): void {
 
   milestoneEl.textContent = game.milestone ?? "";
   milestoneEl.classList.toggle("show", game.milestone !== null);
+
+  const tierHue = (Math.floor(game.score / 10) * 37) % 360;
+  stage.style.setProperty("--tier-hue", `${tierHue}deg`);
 }
 
 function frame(now: number): void {
@@ -108,11 +127,16 @@ function frame(now: number): void {
 bubbleEls.forEach((el) => {
   el.addEventListener("click", () => {
     if (game.status !== "playing") return;
-    const id = el.dataset.bubbleId;
-    if (id === undefined) return;
+    const idStr = el.dataset.bubbleId;
+    if (idStr === undefined) return;
+    const id = Number(idStr);
+    const bubble = game.bubbles.find((b) => b.id === id);
+    if (!bubble) return;
     el.classList.add("popped");
     setTimeout(() => el.classList.remove("popped"), 200);
-    game.catch(Number(id));
+    const { text, tone } = feedbackFor(bubble.kind);
+    spawnFeedback(bubble.x, bubble.y, text, tone);
+    game.catch(id);
     checkRoundOver(performance.now());
     render();
   });

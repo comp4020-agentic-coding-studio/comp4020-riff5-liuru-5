@@ -50,6 +50,83 @@ h1 {
   position: relative;
   flex: 1;
   overflow: hidden;
+  --tier-hue: 0deg;
+}
+
+.atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  filter: hue-rotate(var(--tier-hue));
+  transition: filter 1.5s ease;
+}
+
+.rays {
+  position: absolute;
+  inset: -20%;
+  background: repeating-linear-gradient(
+    105deg,
+    rgba(150, 210, 255, 0.06) 0px,
+    rgba(150, 210, 255, 0.06) 2px,
+    transparent 2px,
+    transparent 90px
+  );
+  animation: rays-drift 22s linear infinite;
+}
+
+@keyframes rays-drift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-180px, 140px);
+  }
+}
+
+.bg-bubbles {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(180, 210, 255, 0.14) 0%, transparent 70%),
+    radial-gradient(circle, rgba(180, 210, 255, 0.09) 0%, transparent 70%),
+    radial-gradient(circle, rgba(180, 210, 255, 0.12) 0%, transparent 70%),
+    radial-gradient(circle, rgba(180, 210, 255, 0.08) 0%, transparent 70%),
+    radial-gradient(circle, rgba(180, 210, 255, 0.1) 0%, transparent 70%);
+  background-size:
+    50px 50px,
+    80px 80px,
+    34px 34px,
+    64px 64px,
+    44px 44px;
+  background-position:
+    12% 110%,
+    78% 120%,
+    32% 130%,
+    58% 115%,
+    46% 125%;
+  background-repeat: no-repeat;
+  animation: bubbles-rise 16s linear infinite;
+}
+
+@keyframes bubbles-rise {
+  from {
+    background-position:
+      12% 110%,
+      78% 120%,
+      32% 130%,
+      58% 115%,
+      46% 125%;
+  }
+  to {
+    background-position:
+      12% -20%,
+      78% -30%,
+      32% -10%,
+      58% -25%,
+      46% -15%;
+  }
 }
 
 #score,
@@ -205,6 +282,40 @@ h1 {
   );
   box-shadow: 0 0 18px rgba(230, 140, 255, 0.45);
   border: 2px dashed rgba(255, 255, 255, 0.55);
+}
+
+.pop-feedback {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #d8f5ff;
+  text-shadow: 0 0 8px rgba(150, 210, 255, 0.6);
+  pointer-events: none;
+  animation: pop-feedback-rise 0.75s ease-out forwards;
+}
+
+.pop-feedback.gold {
+  color: #ffd27a;
+  text-shadow: 0 0 10px rgba(255, 200, 90, 0.7);
+}
+
+.pop-feedback.bad {
+  color: #ff6b7a;
+  text-shadow: 0 0 10px rgba(255, 90, 100, 0.6);
+}
+
+@keyframes pop-feedback-rise {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -160%) scale(1.2);
+  }
 }
 
 #flash {

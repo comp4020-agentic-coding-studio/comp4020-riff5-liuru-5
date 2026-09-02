@@ -35,7 +35,7 @@ const MAX_ACTIVE = 3;
 const MILESTONE_EVERY = 5;
 const MILESTONE_DURATION = 1400;
 
-const KIND_PROFILE: Record<BubbleKind, KindProfile> = {
+export const KIND_PROFILE: Record<BubbleKind, KindProfile> = {
   normal: { value: 1, size: 1, speed: 1, lifetime: 1 },
   gold: { value: 3, size: 0.85, speed: 1.1, lifetime: 0.85 },
   tiny: { value: 2, size: 0.55, speed: 1.6, lifetime: 0.9 },
