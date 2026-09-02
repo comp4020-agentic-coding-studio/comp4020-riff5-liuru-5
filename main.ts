@@ -1,20 +1,42 @@
-import { Game } from "./game.ts";
+import { Game, type BubbleKind } from "./game.ts";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
-const bubbleEl = document.querySelector<HTMLButtonElement>("#bubble")!;
+const bubbleEls = [
+  document.querySelector<HTMLButtonElement>("#bubble-0")!,
+  document.querySelector<HTMLButtonElement>("#bubble-1")!,
+  document.querySelector<HTMLButtonElement>("#bubble-2")!,
+];
 const scoreEl = document.querySelector<HTMLDivElement>("#score")!;
 const bestEl = document.querySelector<HTMLDivElement>("#best")!;
+const livesEl = document.querySelector<HTMLDivElement>("#lives")!;
+const introEl = document.querySelector<HTMLDivElement>("#intro")!;
+const milestoneEl = document.querySelector<HTMLDivElement>("#milestone")!;
 const flashEl = document.querySelector<HTMLDivElement>("#flash")!;
 
 const MIN_SIZE = 22;
 const MAX_SIZE = 72;
 const RESTART_DELAY = 1100;
+const KIND_CLASSES: BubbleKind[] = ["gold", "tiny", "large", "bomb", "split"];
 
 const game = new Game();
 let lastTime: number | null = null;
 let restartAt: number | null = null;
+let wasPlaying = game.status === "playing";
+let lastLives = game.lives;
 let stageWidth = 0;
 let stageHeight = 0;
+
+// Status can flip to "over" either inside game.update() (a miss, driven by
+// frame()) or inside game.catch() (a bomb, driven by a click handler). Both
+// paths funnel through here so the restart timer always gets armed.
+function checkRoundOver(now: number): void {
+  if (wasPlaying && game.status === "over") {
+    flashEl.textContent = String(game.score);
+    flashEl.classList.add("show");
+    restartAt = now + RESTART_DELAY;
+  }
+  wasPlaying = game.status === "playing";
+}
 
 function measure(): void {
   const rect = stage.getBoundingClientRect();
@@ -22,20 +44,46 @@ function measure(): void {
   stageHeight = rect.height;
 }
 
-function sizeFor(age: number, lifetime: number): number {
+function sizeFor(age: number, lifetime: number, kindSize: number): number {
   const remaining = Math.max(0, 1 - age / lifetime);
-  return MIN_SIZE + (MAX_SIZE - MIN_SIZE) * remaining;
+  return (MIN_SIZE + (MAX_SIZE - MIN_SIZE) * remaining) * kindSize;
 }
 
+const lastSlotId: (number | null)[] = [null, null, null];
+
 function render(): void {
-  const { bubble } = game;
-  const size = sizeFor(bubble.age, bubble.lifetime);
-  bubbleEl.style.width = `${size}px`;
-  bubbleEl.style.height = `${size}px`;
-  bubbleEl.style.left = `${bubble.x * stageWidth - size / 2}px`;
-  bubbleEl.style.top = `${bubble.y * stageHeight - size / 2}px`;
+  bubbleEls.forEach((el, slot) => {
+    const bubble = game.bubbles[slot];
+    if (!bubble) {
+      el.hidden = true;
+      lastSlotId[slot] = null;
+      return;
+    }
+    if (lastSlotId[slot] !== bubble.id) el.classList.remove("popped");
+    lastSlotId[slot] = bubble.id;
+    el.hidden = false;
+    for (const kind of KIND_CLASSES) el.classList.remove(`kind-${kind}`);
+    if (bubble.kind !== "normal") el.classList.add(`kind-${bubble.kind}`);
+    el.dataset.bubbleId = String(bubble.id);
+    const size = sizeFor(bubble.age, bubble.lifetime, bubble.size);
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.left = `${bubble.x * stageWidth - size / 2}px`;
+    el.style.top = `${bubble.y * stageHeight - size / 2}px`;
+  });
+
   scoreEl.textContent = String(game.score);
   bestEl.textContent = game.best > 0 ? `best ${game.best}` : "";
+  livesEl.textContent = "♥".repeat(Math.max(0, game.lives)) + "♡".repeat(3 - Math.max(0, game.lives));
+
+  if (game.lives < lastLives && game.status === "playing") {
+    livesEl.classList.add("hit");
+    setTimeout(() => livesEl.classList.remove("hit"), 250);
+  }
+  lastLives = game.lives;
+
+  milestoneEl.textContent = game.milestone ?? "";
+  milestoneEl.classList.toggle("show", game.milestone !== null);
 }
 
 function frame(now: number): void {
@@ -43,20 +91,13 @@ function frame(now: number): void {
   const dt = now - lastTime;
   lastTime = now;
 
-  const wasPlaying = game.status === "playing";
-  if (wasPlaying) {
-    game.update(dt);
-  }
-  const justEnded: boolean = wasPlaying && game.status === "over";
-  if (justEnded) {
-    flashEl.textContent = String(game.score);
-    flashEl.classList.add("show");
-    bubbleEl.classList.add("popped");
-    restartAt = now + RESTART_DELAY;
-  } else if (!wasPlaying && restartAt !== null && now >= restartAt) {
+  game.update(dt);
+  checkRoundOver(now);
+  if (game.status === "over" && restartAt !== null && now >= restartAt) {
     flashEl.classList.remove("show");
-    bubbleEl.classList.remove("popped");
     game.restart();
+    wasPlaying = true;
+    lastLives = game.lives;
     restartAt = null;
   }
 
@@ -64,13 +105,21 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
-bubbleEl.addEventListener("click", () => {
-  if (game.status !== "playing") return;
-  game.catch();
-  render();
+bubbleEls.forEach((el) => {
+  el.addEventListener("click", () => {
+    if (game.status !== "playing") return;
+    const id = el.dataset.bubbleId;
+    if (id === undefined) return;
+    el.classList.add("popped");
+    setTimeout(() => el.classList.remove("popped"), 200);
+    game.catch(Number(id));
+    checkRoundOver(performance.now());
+    render();
+  });
 });
 
 window.addEventListener("resize", measure);
 measure();
 render();
 requestAnimationFrame(frame);
+setTimeout(() => introEl.classList.add("hide"), 0);

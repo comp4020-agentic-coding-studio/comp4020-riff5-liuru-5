@@ -72,7 +72,58 @@ h1 {
   color: #6f88ab;
 }
 
-#bubble {
+#lives {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.75rem;
+  z-index: 2;
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  color: #ff8a9e;
+  margin-top: 1.4rem;
+  transition: transform 0.15s ease;
+}
+
+#lives.hit {
+  transform: scale(1.3);
+  color: #ff3355;
+}
+
+#intro {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #b9c8de;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 1.2s ease 1.4s;
+}
+
+#intro.hide {
+  opacity: 0;
+}
+
+#milestone {
+  position: absolute;
+  z-index: 2;
+  top: 3.4rem;
+  left: 0.75rem;
+  font-size: 0.85rem;
+  color: #ffd27a;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#milestone.show {
+  opacity: 0.9;
+}
+
+.bubble {
   position: absolute;
   border: none;
   border-radius: 50%;
@@ -91,9 +142,69 @@ h1 {
     transform 0.15s ease;
 }
 
-#bubble.popped {
+.bubble.popped {
   opacity: 0;
   transform: scale(1.6);
+}
+
+.bubble[hidden] {
+  display: none;
+}
+
+.bubble.kind-gold {
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 214, 110, 0.75) 45%,
+    rgba(255, 180, 60, 0.35) 75%,
+    rgba(255, 180, 60, 0.05) 100%
+  );
+  box-shadow: 0 0 20px rgba(255, 200, 90, 0.55);
+}
+
+.bubble.kind-tiny {
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(255, 255, 255, 0.95),
+    rgba(170, 255, 210, 0.6) 45%,
+    rgba(120, 255, 180, 0.25) 75%,
+    rgba(120, 255, 180, 0.05) 100%
+  );
+  box-shadow: 0 0 14px rgba(140, 255, 200, 0.5);
+}
+
+.bubble.kind-large {
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(255, 255, 255, 0.9),
+    rgba(180, 170, 255, 0.5) 45%,
+    rgba(140, 120, 255, 0.22) 75%,
+    rgba(140, 120, 255, 0.05) 100%
+  );
+  box-shadow: 0 0 18px rgba(160, 140, 255, 0.4);
+}
+
+.bubble.kind-bomb {
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(210, 210, 215, 0.9),
+    rgba(90, 95, 105, 0.85) 50%,
+    rgba(30, 32, 38, 0.9) 80%,
+    rgba(10, 11, 14, 0.95) 100%
+  );
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.6);
+}
+
+.bubble.kind-split {
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 150, 220, 0.55) 45%,
+    rgba(220, 100, 255, 0.25) 75%,
+    rgba(220, 100, 255, 0.05) 100%
+  );
+  box-shadow: 0 0 18px rgba(230, 140, 255, 0.45);
+  border: 2px dashed rgba(255, 255, 255, 0.55);
 }
 
 #flash {
