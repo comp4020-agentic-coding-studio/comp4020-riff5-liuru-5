@@ -23,7 +23,7 @@ export interface BubbleState {
 const MARGIN = 0.08;
 const MIN_LIFETIME = 650;
 const BASE_LIFETIME = 2200;
-const LIFETIME_STEP = 90;
+const LIFETIME_STEP = 45;
 const BASE_SPEED = 0.06;
 const SPEED_STEP = 0.0025;
 const START_LIVES = 3;
@@ -49,10 +49,11 @@ export class Game {
   private milestoneRemaining = 0;
   private nextId = 0;
   private nextTierAnnounced = MILESTONE_EVERY;
-  // Score at the start of the current life. Speed ramps up from BASE_SPEED
-  // relative to this, so losing a life resets bubbles back to their
-  // starting speed instead of carrying the run's full ramp-up into it.
-  private speedBaselineScore = 0;
+  // Score at the start of the current life. Speed and shrink-rate both
+  // ramp up relative to this, so losing a life resets bubbles back to
+  // their starting speed and lifetime instead of carrying the run's full
+  // ramp-up into the next life.
+  private difficultyBaselineScore = 0;
 
   constructor(private readonly random: () => number = Math.random) {
     this.bubbles = [this.spawnBubble("normal")];
@@ -63,8 +64,9 @@ export class Game {
     origin?: { x: number; y: number },
     angle: number = this.random() * Math.PI * 2,
   ): BubbleState {
-    const speed = BASE_SPEED + Math.max(0, this.score - this.speedBaselineScore) * SPEED_STEP;
-    const lifetime = Math.max(MIN_LIFETIME, BASE_LIFETIME - this.score * LIFETIME_STEP);
+    const progress = Math.max(0, this.score - this.difficultyBaselineScore);
+    const speed = BASE_SPEED + progress * SPEED_STEP;
+    const lifetime = Math.max(MIN_LIFETIME, BASE_LIFETIME - progress * LIFETIME_STEP);
     return {
       id: this.nextId++,
       kind,
@@ -100,7 +102,7 @@ export class Game {
 
   private loseLife(): void {
     this.lives -= 1;
-    this.speedBaselineScore = this.score;
+    this.difficultyBaselineScore = this.score;
     if (this.lives <= 0) {
       this.status = "over";
       this.best = Math.max(this.best, this.score);
@@ -177,7 +179,7 @@ export class Game {
     this.milestone = null;
     this.milestoneRemaining = 0;
     this.nextTierAnnounced = MILESTONE_EVERY;
-    this.speedBaselineScore = 0;
+    this.difficultyBaselineScore = 0;
     this.bubbles = [this.spawnBubble("normal")];
   }
 }

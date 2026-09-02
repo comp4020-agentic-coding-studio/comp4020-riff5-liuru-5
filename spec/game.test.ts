@@ -112,21 +112,22 @@ describe("game: a split event hides one real bubble among fake decoys", () => {
   });
 });
 
-describe("game: losing a life resets bubble speed", () => {
-  it("a bubble spawned right after a miss is back to the starting speed", () => {
+describe("game: losing a life resets both movement speed and shrink speed", () => {
+  it("a bubble spawned right after a miss is back to the starting speed and lifetime", () => {
     const game = new Game(() => 0.99);
     const startingSpeed = Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy);
+    const startingLifetime = game.bubbles[0].lifetime;
 
     for (let i = 0; i < 5; i++) {
       game.catch(game.bubbles[0].id);
     }
-    const rampedSpeed = Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy);
-    expect(rampedSpeed).toBeGreaterThan(startingSpeed);
+    expect(Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy)).toBeGreaterThan(startingSpeed);
+    expect(game.bubbles[0].lifetime).toBeLessThan(startingLifetime);
 
     game.update(game.bubbles[0].lifetime + 1); // miss it, losing a life
     expect(game.lives).toBe(2);
-    const resetSpeed = Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy);
-    expect(resetSpeed).toBeCloseTo(startingSpeed, 5);
+    expect(Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy)).toBeCloseTo(startingSpeed, 5);
+    expect(game.bubbles[0].lifetime).toBeCloseTo(startingLifetime, 5);
   });
 });
 
