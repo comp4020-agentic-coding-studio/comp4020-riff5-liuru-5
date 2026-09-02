@@ -1,9 +1,13 @@
-// Pure game logic, no DOM: one or more bubbles drift inside the unit square.
-// Different kinds score differently, cost lives, or split on catch. Missing
-// a bubble or catching a bomb costs a life; losing the third ends the round.
+// Pure game logic, no DOM: bubbles drift inside the unit square. Most are
+// plain "normal" bubbles worth a point. Occasionally one splits into 2-5
+// bubbles at once — exactly one of them is "real" (distinctively colored)
+// and the rest are "fake" decoys. Catching the real one scores and clears
+// the decoys; catching a fake just pops it. Missing a normal or real bubble
+// costs a life (a fake timing out is harmless); losing the third life ends
+// the round.
 export type GameStatus = "playing" | "over";
 
-export type BubbleKind = "normal" | "gold" | "tiny" | "large" | "bomb" | "split";
+export type BubbleKind = "normal" | "real" | "fake";
 
 export interface BubbleState {
   id: number;
@@ -14,14 +18,6 @@ export interface BubbleState {
   vy: number;
   age: number;
   lifetime: number;
-  size: number; // relative to the baseline bubble, 1 = normal
-}
-
-interface KindProfile {
-  value: number;
-  size: number;
-  speed: number;
-  lifetime: number;
 }
 
 const MARGIN = 0.08;
@@ -31,29 +27,17 @@ const LIFETIME_STEP = 90;
 const BASE_SPEED = 0.06;
 const SPEED_STEP = 0.006;
 const START_LIVES = 3;
-const MAX_ACTIVE = 3;
 const MILESTONE_EVERY = 5;
 const MILESTONE_DURATION = 1400;
+const SPLIT_CHANCE = 0.22;
+const SPLIT_MIN = 2;
+const SPLIT_MAX = 5;
 
-export const KIND_PROFILE: Record<BubbleKind, KindProfile> = {
-  normal: { value: 1, size: 1, speed: 1, lifetime: 1 },
-  gold: { value: 3, size: 0.85, speed: 1.1, lifetime: 0.85 },
-  tiny: { value: 2, size: 0.55, speed: 1.6, lifetime: 0.9 },
-  large: { value: 1, size: 1.6, speed: 0.65, lifetime: 1.2 },
-  bomb: { value: 0, size: 1.1, speed: 0.9, lifetime: 1 },
-  split: { value: 1, size: 1.1, speed: 1, lifetime: 1 },
+export const KIND_PROFILE: Record<BubbleKind, { value: number }> = {
+  normal: { value: 1 },
+  real: { value: 3 },
+  fake: { value: 0 },
 };
-
-// Weighted picks, checked in order; the remainder falls through to "normal".
-// Every entry after the first three points is a variety kind, so the reader's
-// first bubble is always plain.
-const KIND_TABLE: Array<[BubbleKind, number]> = [
-  ["gold", 0.08],
-  ["bomb", 0.1],
-  ["tiny", 0.16],
-  ["large", 0.14],
-  ["split", 0.1],
-];
 
 export class Game {
   score = 0;
@@ -67,25 +51,13 @@ export class Game {
   private nextTierAnnounced = MILESTONE_EVERY;
 
   constructor(private readonly random: () => number = Math.random) {
-    this.bubbles = [this.spawnBubble(undefined, "normal")];
+    this.bubbles = [this.spawnBubble("normal")];
   }
 
-  private pickKind(): BubbleKind {
-    let r = this.random();
-    for (const [kind, weight] of KIND_TABLE) {
-      if (r < weight) return kind;
-      r -= weight;
-    }
-    return "normal";
-  }
-
-  private spawnBubble(origin?: { x: number; y: number }, forceKind?: BubbleKind): BubbleState {
-    const kind = forceKind ?? this.pickKind();
-    const profile = KIND_PROFILE[kind];
+  private spawnBubble(kind: BubbleKind, origin?: { x: number; y: number }): BubbleState {
     const angle = this.random() * Math.PI * 2;
-    const speed = (BASE_SPEED + this.score * SPEED_STEP) * profile.speed;
-    const lifetime =
-      Math.max(MIN_LIFETIME, BASE_LIFETIME - this.score * LIFETIME_STEP) * profile.lifetime;
+    const speed = BASE_SPEED + this.score * SPEED_STEP;
+    const lifetime = Math.max(MIN_LIFETIME, BASE_LIFETIME - this.score * LIFETIME_STEP);
     return {
       id: this.nextId++,
       kind,
@@ -95,8 +67,23 @@ export class Game {
       vy: Math.sin(angle) * speed,
       age: 0,
       lifetime,
-      size: profile.size,
     };
+  }
+
+  private spawnSplitEvent(origin?: { x: number; y: number }): void {
+    const count = SPLIT_MIN + Math.floor(this.random() * (SPLIT_MAX - SPLIT_MIN + 1));
+    const realIndex = Math.floor(this.random() * count);
+    for (let i = 0; i < count; i++) {
+      this.bubbles.push(this.spawnBubble(i === realIndex ? "real" : "fake", origin));
+    }
+  }
+
+  private spawnNext(origin?: { x: number; y: number }): void {
+    if (this.random() < SPLIT_CHANCE) {
+      this.spawnSplitEvent(origin);
+    } else {
+      this.bubbles.push(this.spawnBubble("normal", origin));
+    }
   }
 
   private loseLife(): void {
@@ -107,14 +94,11 @@ export class Game {
     }
   }
 
-  private announceMilestone(origin: { x: number; y: number }): void {
+  private announceMilestone(): void {
     if (this.score >= this.nextTierAnnounced) {
       this.milestone = "Speed up!";
       this.milestoneRemaining = MILESTONE_DURATION;
       this.nextTierAnnounced += MILESTONE_EVERY;
-      if (this.bubbles.length < MAX_ACTIVE) {
-        this.bubbles.push(this.spawnBubble(origin, "normal"));
-      }
     }
   }
 
@@ -125,7 +109,8 @@ export class Game {
     }
     if (this.status !== "playing") return;
 
-    const missed: BubbleState[] = [];
+    let criticalMiss = false;
+    const survivors: BubbleState[] = [];
     for (const b of this.bubbles) {
       b.age += dtMs;
       b.x += b.vx * (dtMs / 1000);
@@ -138,18 +123,22 @@ export class Game {
         b.vy *= -1;
         b.y = Math.min(1 - MARGIN, Math.max(MARGIN, b.y));
       }
-      if (b.age >= b.lifetime) missed.push(b);
+      if (b.age >= b.lifetime) {
+        if (b.kind !== "fake") criticalMiss = true;
+      } else {
+        survivors.push(b);
+      }
     }
 
-    if (missed.length > 0) {
-      this.bubbles = this.bubbles.filter((b) => !missed.includes(b));
-      for (const b of missed) {
-        this.loseLife();
-        if (this.status !== "playing") break;
-      }
-      if (this.status === "playing" && this.bubbles.length === 0) {
-        this.bubbles = [this.spawnBubble()];
-      }
+    if (criticalMiss) {
+      this.bubbles = [];
+      this.loseLife();
+    } else {
+      this.bubbles = survivors;
+    }
+
+    if (this.status === "playing" && this.bubbles.length === 0) {
+      this.spawnNext();
     }
   }
 
@@ -157,29 +146,15 @@ export class Game {
     if (this.status !== "playing") return;
     const bubble = this.bubbles.find((b) => b.id === id);
     if (!bubble) return;
-    this.bubbles = this.bubbles.filter((b) => b.id !== id);
     const origin = { x: bubble.x, y: bubble.y };
+    this.bubbles = this.bubbles.filter((b) => b.id !== id);
 
-    if (bubble.kind === "bomb") {
-      this.loseLife();
-      if (this.status === "playing" && this.bubbles.length === 0) {
-        this.bubbles.push(this.spawnBubble(origin));
-      }
-      return;
-    }
+    if (bubble.kind === "fake") return;
 
     this.score += KIND_PROFILE[bubble.kind].value;
-
-    if (bubble.kind === "split" && this.bubbles.length < MAX_ACTIVE) {
-      const slots = Math.min(2, MAX_ACTIVE - this.bubbles.length);
-      for (let i = 0; i < slots; i++) {
-        this.bubbles.push(this.spawnBubble(origin, "normal"));
-      }
-    } else if (this.bubbles.length === 0) {
-      this.bubbles.push(this.spawnBubble(origin));
-    }
-
-    this.announceMilestone(origin);
+    this.bubbles = [];
+    this.announceMilestone();
+    this.spawnNext(origin);
   }
 
   restart(): void {
@@ -189,6 +164,6 @@ export class Game {
     this.milestone = null;
     this.milestoneRemaining = 0;
     this.nextTierAnnounced = MILESTONE_EVERY;
-    this.bubbles = [this.spawnBubble(undefined, "normal")];
+    this.bubbles = [this.spawnBubble("normal")];
   }
 }

@@ -5,38 +5,27 @@ const bubbleEls = [
   document.querySelector<HTMLButtonElement>("#bubble-0")!,
   document.querySelector<HTMLButtonElement>("#bubble-1")!,
   document.querySelector<HTMLButtonElement>("#bubble-2")!,
+  document.querySelector<HTMLButtonElement>("#bubble-3")!,
+  document.querySelector<HTMLButtonElement>("#bubble-4")!,
 ];
 const scoreEl = document.querySelector<HTMLDivElement>("#score")!;
 const bestEl = document.querySelector<HTMLDivElement>("#best")!;
 const livesEl = document.querySelector<HTMLDivElement>("#lives")!;
 const introEl = document.querySelector<HTMLDivElement>("#intro")!;
 const milestoneEl = document.querySelector<HTMLDivElement>("#milestone")!;
-const flashEl = document.querySelector<HTMLDivElement>("#flash")!;
+const gameoverEl = document.querySelector<HTMLDivElement>("#gameover")!;
+const gameoverScoreEl = document.querySelector<HTMLDivElement>("#gameover-score")!;
+const newGameEl = document.querySelector<HTMLButtonElement>("#new-game")!;
 
 const MIN_SIZE = 22;
 const MAX_SIZE = 72;
-const RESTART_DELAY = 1100;
-const KIND_CLASSES: BubbleKind[] = ["gold", "tiny", "large", "bomb", "split"];
+const KIND_CLASSES: BubbleKind[] = ["real"];
 
 const game = new Game();
 let lastTime: number | null = null;
-let restartAt: number | null = null;
-let wasPlaying = game.status === "playing";
 let lastLives = game.lives;
 let stageWidth = 0;
 let stageHeight = 0;
-
-// Status can flip to "over" either inside game.update() (a miss, driven by
-// frame()) or inside game.catch() (a bomb, driven by a click handler). Both
-// paths funnel through here so the restart timer always gets armed.
-function checkRoundOver(now: number): void {
-  if (wasPlaying && game.status === "over") {
-    flashEl.textContent = String(game.score);
-    flashEl.classList.add("show");
-    restartAt = now + RESTART_DELAY;
-  }
-  wasPlaying = game.status === "playing";
-}
 
 function measure(): void {
   const rect = stage.getBoundingClientRect();
@@ -44,12 +33,12 @@ function measure(): void {
   stageHeight = rect.height;
 }
 
-function sizeFor(age: number, lifetime: number, kindSize: number): number {
+function sizeFor(age: number, lifetime: number): number {
   const remaining = Math.max(0, 1 - age / lifetime);
-  return (MIN_SIZE + (MAX_SIZE - MIN_SIZE) * remaining) * kindSize;
+  return MIN_SIZE + (MAX_SIZE - MIN_SIZE) * remaining;
 }
 
-function spawnFeedback(x: number, y: number, text: string, tone: "" | "gold" | "bad"): void {
+function spawnFeedback(x: number, y: number, text: string, tone: "" | "gold"): void {
   const el = document.createElement("span");
   el.className = tone ? `pop-feedback ${tone}` : "pop-feedback";
   el.textContent = text;
@@ -59,13 +48,12 @@ function spawnFeedback(x: number, y: number, text: string, tone: "" | "gold" | "
   el.addEventListener("animationend", () => el.remove());
 }
 
-function feedbackFor(kind: BubbleKind): { text: string; tone: "" | "gold" | "bad" } {
-  if (kind === "bomb") return { text: "boom", tone: "bad" };
-  const value = KIND_PROFILE[kind].value;
-  return { text: `+${value}`, tone: kind === "gold" ? "gold" : "" };
+function feedbackFor(kind: BubbleKind): { text: string; tone: "" | "gold" } | null {
+  if (kind === "fake") return null;
+  return { text: `+${KIND_PROFILE[kind].value}`, tone: kind === "real" ? "gold" : "" };
 }
 
-const lastSlotId: (number | null)[] = [null, null, null];
+const lastSlotId: (number | null)[] = bubbleEls.map(() => null);
 
 function render(): void {
   bubbleEls.forEach((el, slot) => {
@@ -79,9 +67,9 @@ function render(): void {
     lastSlotId[slot] = bubble.id;
     el.hidden = false;
     for (const kind of KIND_CLASSES) el.classList.remove(`kind-${kind}`);
-    if (bubble.kind !== "normal") el.classList.add(`kind-${bubble.kind}`);
+    if (bubble.kind === "real") el.classList.add("kind-real");
     el.dataset.bubbleId = String(bubble.id);
-    const size = sizeFor(bubble.age, bubble.lifetime, bubble.size);
+    const size = sizeFor(bubble.age, bubble.lifetime);
     el.style.width = `${size}px`;
     el.style.height = `${size}px`;
     el.style.left = `${bubble.x * stageWidth - size / 2}px`;
@@ -103,6 +91,11 @@ function render(): void {
 
   const tierHue = (Math.floor(game.score / 10) * 37) % 360;
   stage.style.setProperty("--tier-hue", `${tierHue}deg`);
+
+  gameoverEl.hidden = game.status !== "over";
+  if (game.status === "over") {
+    gameoverScoreEl.textContent = `score ${game.score} · best ${game.best}`;
+  }
 }
 
 function frame(now: number): void {
@@ -111,15 +104,6 @@ function frame(now: number): void {
   lastTime = now;
 
   game.update(dt);
-  checkRoundOver(now);
-  if (game.status === "over" && restartAt !== null && now >= restartAt) {
-    flashEl.classList.remove("show");
-    game.restart();
-    wasPlaying = true;
-    lastLives = game.lives;
-    restartAt = null;
-  }
-
   render();
   requestAnimationFrame(frame);
 }
@@ -134,12 +118,17 @@ bubbleEls.forEach((el) => {
     if (!bubble) return;
     el.classList.add("popped");
     setTimeout(() => el.classList.remove("popped"), 200);
-    const { text, tone } = feedbackFor(bubble.kind);
-    spawnFeedback(bubble.x, bubble.y, text, tone);
+    const feedback = feedbackFor(bubble.kind);
+    if (feedback) spawnFeedback(bubble.x, bubble.y, feedback.text, feedback.tone);
     game.catch(id);
-    checkRoundOver(performance.now());
     render();
   });
+});
+
+newGameEl.addEventListener("click", () => {
+  game.restart();
+  lastLives = game.lives;
+  render();
 });
 
 window.addEventListener("resize", measure);

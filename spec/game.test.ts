@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Game } from "../game.ts";
 
-// This riff replaced the crit brief's single rule (one miss ends the round)
-// with variety, lives and a difficulty curve. These tests encode that new
-// contract instead of the old one.
+// This riff simplified the crit brief down to one mechanic: normal bubbles,
+// plus an occasional split event with exactly one real bubble hiding among
+// decoys. These tests encode that contract, plus the pause-on-loss / restart
+// contract the UI depends on.
 describe("game: three lives absorb misses before a round ends", () => {
-  it("a missed bubble costs a life but keeps the round going", () => {
-    const game = new Game(() => 0.99); // always resolves to a "normal" bubble
+  it("a missed normal bubble costs a life but keeps the round going", () => {
+    const game = new Game(() => 0.99); // never rolls a split event
     const lifetime = game.bubbles[0].lifetime;
 
     game.update(lifetime - 1);
@@ -21,8 +22,6 @@ describe("game: three lives absorb misses before a round ends", () => {
 
   it("ends the round only once the third life is lost, recording the best score", () => {
     const game = new Game(() => 0.99);
-
-    game.update(100);
     game.catch(game.bubbles[0].id);
     expect(game.score).toBe(1);
 
@@ -35,7 +34,7 @@ describe("game: three lives absorb misses before a round ends", () => {
     expect(game.best).toBe(1);
   });
 
-  it("a finished round can restart with full lives and zero score", () => {
+  it("a finished round can restart with full lives, zero score, and a fresh normal bubble", () => {
     const game = new Game(() => 0.99);
     for (let i = 0; i < 3; i++) {
       game.update(game.bubbles[0].lifetime + 1);
@@ -47,47 +46,69 @@ describe("game: three lives absorb misses before a round ends", () => {
     expect(game.score).toBe(0);
     expect(game.lives).toBe(3);
     expect(game.bubbles).toHaveLength(1);
+    expect(game.bubbles[0].kind).toBe("normal");
   });
 });
 
-describe("game: bubble variety reads consistently on catch", () => {
-  it("a gold bubble is worth three points", () => {
+describe("game: a split event hides one real bubble among fake decoys", () => {
+  it("catching the real bubble scores and clears every decoy in the event", () => {
     const game = new Game(() => 0.99);
-    game.bubbles[0].kind = "gold";
-    game.catch(game.bubbles[0].id);
+    const base = game.bubbles[0];
+    const decoys = [
+      { ...base, id: 101, kind: "fake" as const },
+      { ...base, id: 103, kind: "fake" as const },
+    ];
+    game.bubbles = [decoys[0], { ...base, id: 102, kind: "real" }, decoys[1]];
+
+    game.catch(102);
+
     expect(game.score).toBe(3);
+    expect(game.bubbles).not.toContain(decoys[0]);
+    expect(game.bubbles).not.toContain(decoys[1]);
   });
 
-  it("a tiny bubble is worth two points", () => {
+  it("catching a fake bubble scores nothing and leaves the rest of the event running", () => {
     const game = new Game(() => 0.99);
-    game.bubbles[0].kind = "tiny";
-    game.catch(game.bubbles[0].id);
-    expect(game.score).toBe(2);
-  });
+    const base = game.bubbles[0];
+    game.bubbles = [
+      { ...base, id: 1, kind: "fake" },
+      { ...base, id: 2, kind: "real" },
+    ];
 
-  it("a large bubble is worth one point, same as normal", () => {
-    const game = new Game(() => 0.99);
-    game.bubbles[0].kind = "large";
-    game.catch(game.bubbles[0].id);
-    expect(game.score).toBe(1);
-  });
+    game.catch(1);
 
-  it("catching a bomb costs a life instead of scoring", () => {
-    const game = new Game(() => 0.99);
-    game.bubbles[0].kind = "bomb";
-    game.catch(game.bubbles[0].id);
     expect(game.score).toBe(0);
+    expect(game.status).toBe("playing");
+    expect(game.bubbles.map((b) => b.id)).toEqual([2]);
+  });
+
+  it("letting a fake bubble time out costs nothing and leaves the real one active", () => {
+    const game = new Game(() => 0.99);
+    const base = game.bubbles[0];
+    game.bubbles = [
+      { ...base, id: 1, kind: "fake", age: 0, lifetime: 100 },
+      { ...base, id: 2, kind: "real", age: 0, lifetime: 100000 },
+    ];
+
+    game.update(150);
+
+    expect(game.lives).toBe(3);
+    expect(game.bubbles.map((b) => b.id)).toEqual([2]);
+  });
+
+  it("letting the real bubble time out costs a life and ends the event", () => {
+    const game = new Game(() => 0.99);
+    const base = game.bubbles[0];
+    game.bubbles = [
+      { ...base, id: 1, kind: "fake", age: 0, lifetime: 100000 },
+      { ...base, id: 2, kind: "real", age: 0, lifetime: 100 },
+    ];
+
+    game.update(150);
+
     expect(game.lives).toBe(2);
     expect(game.status).toBe("playing");
-    expect(game.bubbles).toHaveLength(1);
-  });
-
-  it("a caught split bubble becomes two bubbles", () => {
-    const game = new Game(() => 0.99);
-    game.bubbles[0].kind = "split";
-    game.catch(game.bubbles[0].id);
-    expect(game.score).toBe(1);
-    expect(game.bubbles).toHaveLength(2);
+    expect(game.bubbles).toHaveLength(1); // a fresh bubble replaces the cleared event
   });
 });
 
@@ -97,7 +118,7 @@ describe("game: the difficulty curve announces itself", () => {
     expect(game.milestone).toBeNull();
 
     for (let i = 0; i < 5; i++) {
-      game.catch(game.bubbles[game.bubbles.length - 1].id);
+      game.catch(game.bubbles[0].id);
     }
 
     expect(game.score).toBe(5);
@@ -107,7 +128,7 @@ describe("game: the difficulty curve announces itself", () => {
   it("the milestone announcement clears itself after its duration", () => {
     const game = new Game(() => 0.99);
     for (let i = 0; i < 5; i++) {
-      game.catch(game.bubbles[game.bubbles.length - 1].id);
+      game.catch(game.bubbles[0].id);
     }
     expect(game.milestone).not.toBeNull();
 
