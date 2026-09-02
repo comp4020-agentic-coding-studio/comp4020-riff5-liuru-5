@@ -17,8 +17,8 @@ const gameoverEl = document.querySelector<HTMLDivElement>("#gameover")!;
 const gameoverScoreEl = document.querySelector<HTMLDivElement>("#gameover-score")!;
 const newGameEl = document.querySelector<HTMLButtonElement>("#new-game")!;
 
-const MIN_SIZE = 22;
-const MAX_SIZE = 72;
+const MIN_SIZE = 30;
+const MAX_SIZE = 92;
 const KIND_CLASSES: BubbleKind[] = ["real"];
 
 const game = new Game();

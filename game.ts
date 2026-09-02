@@ -54,8 +54,11 @@ export class Game {
     this.bubbles = [this.spawnBubble("normal")];
   }
 
-  private spawnBubble(kind: BubbleKind, origin?: { x: number; y: number }): BubbleState {
-    const angle = this.random() * Math.PI * 2;
+  private spawnBubble(
+    kind: BubbleKind,
+    origin?: { x: number; y: number },
+    angle: number = this.random() * Math.PI * 2,
+  ): BubbleState {
     const speed = BASE_SPEED + this.score * SPEED_STEP;
     const lifetime = Math.max(MIN_LIFETIME, BASE_LIFETIME - this.score * LIFETIME_STEP);
     return {
@@ -73,8 +76,13 @@ export class Game {
   private spawnSplitEvent(origin?: { x: number; y: number }): void {
     const count = SPLIT_MIN + Math.floor(this.random() * (SPLIT_MAX - SPLIT_MIN + 1));
     const realIndex = Math.floor(this.random() * count);
+    // Evenly spaced angles (with a shared random rotation) so the burst
+    // reads as bubbles radiating outward from the split point, not a
+    // random scatter.
+    const rotation = this.random() * Math.PI * 2;
     for (let i = 0; i < count; i++) {
-      this.bubbles.push(this.spawnBubble(i === realIndex ? "real" : "fake", origin));
+      const angle = rotation + (i / count) * Math.PI * 2;
+      this.bubbles.push(this.spawnBubble(i === realIndex ? "real" : "fake", origin, angle));
     }
   }
 
