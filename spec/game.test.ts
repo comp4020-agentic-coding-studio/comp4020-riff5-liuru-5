@@ -112,6 +112,24 @@ describe("game: a split event hides one real bubble among fake decoys", () => {
   });
 });
 
+describe("game: losing a life resets bubble speed", () => {
+  it("a bubble spawned right after a miss is back to the starting speed", () => {
+    const game = new Game(() => 0.99);
+    const startingSpeed = Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy);
+
+    for (let i = 0; i < 5; i++) {
+      game.catch(game.bubbles[0].id);
+    }
+    const rampedSpeed = Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy);
+    expect(rampedSpeed).toBeGreaterThan(startingSpeed);
+
+    game.update(game.bubbles[0].lifetime + 1); // miss it, losing a life
+    expect(game.lives).toBe(2);
+    const resetSpeed = Math.hypot(game.bubbles[0].vx, game.bubbles[0].vy);
+    expect(resetSpeed).toBeCloseTo(startingSpeed, 5);
+  });
+});
+
 describe("game: the difficulty curve announces itself", () => {
   it("crossing a multiple of five catches announces a milestone", () => {
     const game = new Game(() => 0.99);

@@ -25,7 +25,7 @@ const MIN_LIFETIME = 650;
 const BASE_LIFETIME = 2200;
 const LIFETIME_STEP = 90;
 const BASE_SPEED = 0.06;
-const SPEED_STEP = 0.006;
+const SPEED_STEP = 0.0025;
 const START_LIVES = 3;
 const MILESTONE_EVERY = 5;
 const MILESTONE_DURATION = 1400;
@@ -49,6 +49,10 @@ export class Game {
   private milestoneRemaining = 0;
   private nextId = 0;
   private nextTierAnnounced = MILESTONE_EVERY;
+  // Score at the start of the current life. Speed ramps up from BASE_SPEED
+  // relative to this, so losing a life resets bubbles back to their
+  // starting speed instead of carrying the run's full ramp-up into it.
+  private speedBaselineScore = 0;
 
   constructor(private readonly random: () => number = Math.random) {
     this.bubbles = [this.spawnBubble("normal")];
@@ -59,7 +63,7 @@ export class Game {
     origin?: { x: number; y: number },
     angle: number = this.random() * Math.PI * 2,
   ): BubbleState {
-    const speed = BASE_SPEED + this.score * SPEED_STEP;
+    const speed = BASE_SPEED + Math.max(0, this.score - this.speedBaselineScore) * SPEED_STEP;
     const lifetime = Math.max(MIN_LIFETIME, BASE_LIFETIME - this.score * LIFETIME_STEP);
     return {
       id: this.nextId++,
@@ -96,6 +100,7 @@ export class Game {
 
   private loseLife(): void {
     this.lives -= 1;
+    this.speedBaselineScore = this.score;
     if (this.lives <= 0) {
       this.status = "over";
       this.best = Math.max(this.best, this.score);
@@ -172,6 +177,7 @@ export class Game {
     this.milestone = null;
     this.milestoneRemaining = 0;
     this.nextTierAnnounced = MILESTONE_EVERY;
+    this.speedBaselineScore = 0;
     this.bubbles = [this.spawnBubble("normal")];
   }
 }
